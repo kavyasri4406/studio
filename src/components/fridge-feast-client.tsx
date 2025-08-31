@@ -285,7 +285,7 @@ export function FridgeFeastClient() {
           <div className="text-center p-8 animate-in fade-in duration-300">
             <Loader2 className="mx-auto h-12 w-12 animate-spin text-primary" />
             <p className="mt-4 text-muted-foreground">
-              Preparing your recipe... this might take a moment.
+              Preparing your recipe...
             </p>
           </div>
         )}

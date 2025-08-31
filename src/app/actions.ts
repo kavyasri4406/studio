@@ -55,7 +55,7 @@ export async function getRecipeDetails(
   }
 
   try {
-    const detailsPromise = ai.generate({
+    const { output } = await ai.generate({
       prompt: `You are a world-class chef. Generate a recipe for "${recipeName}". You must include a title, a short appetizing description, a list of all ingredients, step-by-step cooking instructions, prep time, and cook time. Ensure instructions are clear and easy to follow.`,
       output: {
         schema: RecipeDetailsSchema,
@@ -63,24 +63,11 @@ export async function getRecipeDetails(
       temperature: 0.2,
     });
 
-    const imagePromise = ai.generate({
-      model: 'googleai/imagen-4.0-fast-generate-001',
-      prompt: `A photorealistic, delicious-looking photo of "${recipeName}", beautifully plated and ready to eat.`,
-    });
-
-    const [detailsResult, imageResult] = await Promise.all([
-      detailsPromise,
-      imagePromise,
-    ]);
-
-    const recipe = detailsResult.output;
-    if (!recipe) {
+    if (!output) {
       throw new Error('Failed to generate recipe details.');
     }
 
-    const imageUrl = imageResult.media.url;
-
-    return { ...recipe, title: recipeName, imageUrl };
+    return { ...output, title: recipeName };
   } catch (e) {
     console.error(e);
     return {
