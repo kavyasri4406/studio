@@ -1,4 +1,3 @@
-
 'use server';
 
 import { suggestRecipesFromIngredients } from '@/ai/flows/suggest-recipes-from-ingredients';
@@ -20,7 +19,9 @@ const RecipeDetailsSchema = z.object({
   cookTime: z.string().describe('Estimated cooking time.'),
 });
 
-export type RecipeDetails = z.infer<typeof RecipeDetailsSchema>;
+export type RecipeDetails = z.infer<typeof RecipeDetailsSchema> & {
+  imageUrl?: string;
+};
 
 export async function getRecipeSuggestions(
   ingredients: string
@@ -54,7 +55,7 @@ export async function getRecipeDetails(
   }
 
   try {
-    const result = await ai.generate({
+    const detailsPromise = ai.generate({
       prompt: `You are a world-class chef. Generate a recipe for "${recipeName}". You must include a title, a short appetizing description, a list of all ingredients, step-by-step cooking instructions, prep time, and cook time. Ensure instructions are clear and easy to follow.`,
       output: {
         schema: RecipeDetailsSchema,
@@ -62,12 +63,24 @@ export async function getRecipeDetails(
       temperature: 0.2,
     });
 
-    const recipe = result.output;
+    const imagePromise = ai.generate({
+      model: 'googleai/imagen-4.0-fast-generate-001',
+      prompt: `A photorealistic, delicious-looking photo of "${recipeName}", beautifully plated and ready to eat.`,
+    });
+
+    const [detailsResult, imageResult] = await Promise.all([
+      detailsPromise,
+      imagePromise,
+    ]);
+
+    const recipe = detailsResult.output;
     if (!recipe) {
       throw new Error('Failed to generate recipe details.');
     }
 
-    return { ...recipe, title: recipeName };
+    const imageUrl = imageResult.media.url;
+
+    return { ...recipe, title: recipeName, imageUrl };
   } catch (e) {
     console.error(e);
     return {

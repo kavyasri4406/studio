@@ -1,7 +1,8 @@
 
 'use client';
 
-import { useState, type FormEvent } from 'react';
+import { useState, type FormEvent, useEffect } from 'react';
+import Image from 'next/image';
 import {
   getRecipeSuggestions,
   getRecipeDetails,
@@ -26,6 +27,8 @@ import {
   Flame,
   Soup,
   Search,
+  Star,
+  BookHeart,
 } from 'lucide-react';
 
 type ViewState =
@@ -33,14 +36,37 @@ type ViewState =
   | 'loadingSuggestions'
   | 'suggestionsLoaded'
   | 'loadingRecipe'
-  | 'recipeLoaded';
+  | 'recipeLoaded'
+  | 'viewingFavorites';
 
 export function FridgeFeastClient() {
   const [view, setView] = useState<ViewState>('initial');
   const [ingredients, setIngredients] = useState('');
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [recipe, setRecipe] = useState<RecipeDetails | null>(null);
+  const [favorites, setFavorites] = useState<RecipeDetails[]>([]);
   const { toast } = useToast();
+
+  useEffect(() => {
+    try {
+      const storedFavorites = localStorage.getItem('favoriteRecipes');
+      if (storedFavorites) {
+        setFavorites(JSON.parse(storedFavorites));
+      }
+    } catch (error) {
+      console.error('Failed to parse favorites from localStorage', error);
+      // If parsing fails, it's safer to start with an empty list
+      setFavorites([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('favoriteRecipes', JSON.stringify(favorites));
+    } catch (error) {
+      console.error('Failed to save favorites to localStorage', error);
+    }
+  }, [favorites]);
 
   const handleSuggestionSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -75,6 +101,11 @@ export function FridgeFeastClient() {
     }
   };
 
+  const handleFavoriteRecipeSelect = (selectedRecipe: RecipeDetails) => {
+    setRecipe(selectedRecipe);
+    setView('recipeLoaded');
+  };
+
   const handleBackToSuggestions = () => {
     setRecipe(null);
     setView('suggestionsLoaded');
@@ -87,47 +118,82 @@ export function FridgeFeastClient() {
     setView('initial');
   };
 
+  const toggleFavorite = (recipeToToggle: RecipeDetails) => {
+    const isFavorite = favorites.some(
+      (fav) => fav.title === recipeToToggle.title
+    );
+    if (isFavorite) {
+      setFavorites(
+        favorites.filter((fav) => fav.title !== recipeToToggle.title)
+      );
+      toast({
+        title: 'Removed from Favorites',
+        description: `${recipeToToggle.title} has been removed from your favorites.`,
+      });
+    } else {
+      setFavorites([...favorites, recipeToToggle]);
+      toast({
+        title: 'Added to Favorites!',
+        description: `${recipeToToggle.title} has been saved to your favorites.`,
+      });
+    }
+  };
+
+  const handleViewFavorites = () => {
+    setView('viewingFavorites');
+  };
+
   const isLoading =
     view === 'loadingSuggestions' || view === 'loadingRecipe';
+
+  const isCurrentRecipeFavorite =
+    recipe && favorites.some((fav) => fav.title === recipe.title);
 
   return (
     <Card className="w-full shadow-lg transition-all duration-300">
       <CardHeader>
         <CardTitle className="text-2xl font-headline">
-          What's in your fridge?
+          {view === 'viewingFavorites'
+            ? 'Your Favorite Recipes'
+            : "What's in your fridge?"}
         </CardTitle>
         <CardDescription>
-          Enter your ingredients, separated by commas, to discover delicious
-          recipes.
+          {view === 'viewingFavorites'
+            ? 'Here are the recipes you saved for later.'
+            : 'Enter your ingredients, separated by commas, to discover delicious recipes.'}
         </CardDescription>
       </CardHeader>
       <CardContent>
-        {view !== 'recipeLoaded' && view !== 'loadingRecipe' && (
-          <form
-            onSubmit={handleSuggestionSubmit}
-            className="flex flex-col sm:flex-row gap-2 mb-6"
-          >
-            <Input
-              name="ingredients"
-              placeholder="e.g., chicken breast, tomatoes, basil"
-              className="flex-grow"
-              required
-              value={ingredients}
-              onChange={(e) => setIngredients(e.target.value)}
-              disabled={isLoading}
-            />
-            <Button
-              type="submit"
-              disabled={isLoading}
-              className="w-full sm:w-auto bg-accent hover:bg-accent/90 text-accent-foreground"
+        {view !== 'recipeLoaded' &&
+          view !== 'loadingRecipe' &&
+          view !== 'viewingFavorites' && (
+            <form
+              onSubmit={handleSuggestionSubmit}
+              className="flex flex-col sm:flex-row gap-2 mb-6"
             >
-              {view === 'loadingSuggestions' ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : <Search className="mr-2 h-4 w-4" />}
-              Find Recipes
-            </Button>
-          </form>
-        )}
+              <Input
+                name="ingredients"
+                placeholder="e.g., chicken breast, tomatoes, basil"
+                className="flex-grow"
+                required
+                value={ingredients}
+                onChange={(e) => setIngredients(e.target.value)}
+                disabled={isLoading}
+              />
+              <Button
+                type="submit"
+                disabled={isLoading}
+                className="w-full sm:w-auto bg-accent hover:bg-accent/90 text-accent-foreground"
+              >
+                {view === 'loadingSuggestions' ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Search className="mr-2 h-4 w-4" />
+                )}
+                Find Recipes
+              </Button>
+            </form>
+          )}
 
         {view === 'loadingSuggestions' && (
           <div className="text-center p-8 animate-in fade-in duration-300">
@@ -135,6 +201,21 @@ export function FridgeFeastClient() {
             <p className="mt-4 text-muted-foreground">
               Searching for the best recipes...
             </p>
+          </div>
+        )}
+
+        {(view === 'suggestionsLoaded' || view === 'initial') && (
+          <div className="flex justify-end mb-4">
+            {favorites.length > 0 && view !== 'viewingFavorites' && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleViewFavorites}
+              >
+                <BookHeart className="mr-2 h-4 w-4" />
+                View Favorites ({favorites.length})
+              </Button>
+            )}
           </div>
         )}
 
@@ -167,23 +248,90 @@ export function FridgeFeastClient() {
           </div>
         )}
 
+        {view === 'viewingFavorites' && (
+          <div className="animate-in fade-in duration-500">
+            <div className="flex justify-end items-center mb-4">
+              <Button variant="outline" size="sm" onClick={handleNewSearch}>
+                New Search
+              </Button>
+            </div>
+            {favorites.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {favorites.map((favRecipe) => (
+                  <Card
+                    key={favRecipe.title}
+                    onClick={() => handleFavoriteRecipeSelect(favRecipe)}
+                    className="cursor-pointer hover:shadow-md hover:border-primary transition-all"
+                  >
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Star className="w-5 h-5 text-yellow-400 fill-yellow-400" />
+                        <span>{favRecipe.title}</span>
+                      </CardTitle>
+                    </CardHeader>
+                  </Card>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center text-muted-foreground p-8 border-2 border-dashed rounded-lg">
+                <BookHeart className="mx-auto h-12 w-12" />
+                <p className="mt-4">You haven't saved any favorites yet.</p>
+              </div>
+            )}
+          </div>
+        )}
+
         {view === 'loadingRecipe' && (
           <div className="text-center p-8 animate-in fade-in duration-300">
             <Loader2 className="mx-auto h-12 w-12 animate-spin text-primary" />
-            <p className="mt-4 text-muted-foreground">Preparing your recipe...</p>
+            <p className="mt-4 text-muted-foreground">
+              Preparing your recipe... this might take a moment.
+            </p>
           </div>
         )}
 
         {view === 'recipeLoaded' && recipe && (
           <div className="animate-in fade-in-50 duration-500">
-            <Button
-              variant="ghost"
-              onClick={handleBackToSuggestions}
-              className="mb-4"
-            >
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to Suggestions
-            </Button>
+            <div className="flex justify-between items-start mb-4">
+              <Button
+                variant="ghost"
+                onClick={
+                  suggestions.length > 0
+                    ? handleBackToSuggestions
+                    : handleViewFavorites
+                }
+              >
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Back to {suggestions.length > 0 ? 'Suggestions' : 'Favorites'}
+              </Button>
+              <Button
+                variant={isCurrentRecipeFavorite ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => toggleFavorite(recipe)}
+              >
+                <Star
+                  className={`mr-2 h-4 w-4 ${
+                    isCurrentRecipeFavorite ? 'text-yellow-400 fill-yellow-400' : ''
+                  }`}
+                />
+                {isCurrentRecipeFavorite
+                  ? 'Saved to Favorites'
+                  : 'Save to Favorites'}
+              </Button>
+            </div>
+
+            {recipe.imageUrl && (
+              <div className="mb-6 rounded-lg overflow-hidden shadow-lg aspect-video relative">
+                <Image
+                  src={recipe.imageUrl}
+                  alt={`An image of ${recipe.title}`}
+                  fill
+                  style={{ objectFit: 'cover' }}
+                  data-ai-hint="recipe food"
+                />
+              </div>
+            )}
+
             <h2 className="text-3xl font-bold font-headline mb-2">
               {recipe.title}
             </h2>
@@ -214,8 +362,8 @@ export function FridgeFeastClient() {
                   Instructions
                 </h3>
                 <ol className="list-decimal list-inside space-y-4">
-                  {recipe.instructions.map((step) => (
-                    <li key={step}>{step}</li>
+                  {recipe.instructions.map((step, index) => (
+                    <li key={index}>{step}</li>
                   ))}
                 </ol>
               </div>
@@ -223,7 +371,7 @@ export function FridgeFeastClient() {
           </div>
         )}
 
-        {view === 'initial' && (
+        {view === 'initial' && !isLoading && (
           <div className="text-center text-muted-foreground p-8 border-2 border-dashed rounded-lg">
             <Soup className="mx-auto h-12 w-12" />
             <p className="mt-4">Your recipe suggestions will appear here.</p>
