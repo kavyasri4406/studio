@@ -6,6 +6,7 @@ import Image from 'next/image';
 import {
   getRecipeSuggestions,
   getRecipeDetails,
+  getShoppingList,
   type RecipeDetails,
 } from '@/app/actions';
 import { Button } from '@/components/ui/button';
@@ -20,6 +21,13 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import {
   Loader2,
   UtensilsCrossed,
   ArrowLeft,
@@ -29,6 +37,9 @@ import {
   Search,
   Star,
   BookHeart,
+  ClipboardList,
+  ShoppingCart,
+  Check,
 } from 'lucide-react';
 
 type ViewState =
@@ -45,6 +56,8 @@ export function FridgeFeastClient() {
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [recipe, setRecipe] = useState<RecipeDetails | null>(null);
   const [favorites, setFavorites] = useState<RecipeDetails[]>([]);
+  const [shoppingList, setShoppingList] = useState<string[] | null>(null);
+  const [isShoppingListLoading, setIsShoppingListLoading] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -87,6 +100,7 @@ export function FridgeFeastClient() {
 
   const handleRecipeSelect = async (recipeName: string) => {
     setView('loadingRecipe');
+    setShoppingList(null);
     const result = await getRecipeDetails(recipeName);
     if (result.error) {
       toast({
@@ -103,6 +117,7 @@ export function FridgeFeastClient() {
 
   const handleFavoriteRecipeSelect = (selectedRecipe: RecipeDetails) => {
     setRecipe(selectedRecipe);
+    setShoppingList(null);
     setView('recipeLoaded');
   };
 
@@ -141,6 +156,22 @@ export function FridgeFeastClient() {
 
   const handleViewFavorites = () => {
     setView('viewingFavorites');
+  };
+
+  const handleGenerateShoppingList = async () => {
+    if (!recipe) return;
+    setIsShoppingListLoading(true);
+    const result = await getShoppingList(ingredients, recipe.ingredients);
+    if (result.error) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: result.error,
+      });
+    } else if (result.shoppingList) {
+      setShoppingList(result.shoppingList);
+    }
+    setIsShoppingListLoading(false);
   };
 
   const isLoading =
@@ -292,7 +323,7 @@ export function FridgeFeastClient() {
 
         {view === 'recipeLoaded' && recipe && (
           <div className="animate-in fade-in-50 duration-500">
-            <div className="flex justify-between items-start mb-4">
+            <div className="flex justify-between items-start mb-4 gap-2">
               <Button
                 variant="ghost"
                 onClick={
@@ -304,20 +335,68 @@ export function FridgeFeastClient() {
                 <ArrowLeft className="mr-2 h-4 w-4" />
                 Back to {suggestions.length > 0 ? 'Suggestions' : 'Favorites'}
               </Button>
-              <Button
-                variant={isCurrentRecipeFavorite ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => toggleFavorite(recipe)}
-              >
-                <Star
-                  className={`mr-2 h-4 w-4 ${
-                    isCurrentRecipeFavorite ? 'text-yellow-400 fill-yellow-400' : ''
-                  }`}
-                />
-                {isCurrentRecipeFavorite
-                  ? 'Saved to Favorites'
-                  : 'Save to Favorites'}
-              </Button>
+              <div className='flex gap-2'>
+                <Dialog>
+                  <DialogTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleGenerateShoppingList}
+                      disabled={isShoppingListLoading}
+                    >
+                      {isShoppingListLoading ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <ClipboardList className="mr-2 h-4 w-4" />
+                      )}
+                      Shopping List
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle className="flex items-center gap-2">
+                        <ShoppingCart className="w-6 h-6" />
+                        Shopping List
+                      </DialogTitle>
+                    </DialogHeader>
+                    {isShoppingListLoading ? (
+                      <div className="text-center p-8">
+                        <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
+                        <p className="mt-4 text-muted-foreground">
+                          Generating your list...
+                        </p>
+                      </div>
+                    ) : shoppingList && shoppingList.length > 0 ? (
+                      <ul className="list-disc list-inside space-y-2 pl-4">
+                        {shoppingList.map((item) => (
+                          <li key={item}>{item}</li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <div className="text-center text-muted-foreground p-8 border-2 border-dashed rounded-lg">
+                        <Check className="mx-auto h-12 w-12 text-green-500" />
+                        <p className="mt-4 font-semibold">
+                          You have all the ingredients!
+                        </p>
+                      </div>
+                    )}
+                  </DialogContent>
+                </Dialog>
+                <Button
+                  variant={isCurrentRecipeFavorite ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => toggleFavorite(recipe)}
+                >
+                  <Star
+                    className={`mr-2 h-4 w-4 ${
+                      isCurrentRecipeFavorite ? 'text-yellow-400 fill-yellow-400' : ''
+                    }`}
+                  />
+                  {isCurrentRecipeFavorite
+                    ? 'Saved'
+                    : 'Save'}
+                </Button>
+              </div>
             </div>
 
             {recipe.imageUrl && (

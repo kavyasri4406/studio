@@ -1,6 +1,7 @@
 'use server';
 
 import { suggestRecipesFromIngredients } from '@/ai/flows/suggest-recipes-from-ingredients';
+import { generateShoppingList } from '@/ai/flows/generate-shopping-list-flow';
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
 
@@ -73,6 +74,25 @@ export async function getRecipeDetails(
     return {
       error:
         'An error occurred while fetching recipe details. Please try again.',
+    };
+  }
+}
+
+export async function getShoppingList(
+  availableIngredients: string,
+  requiredIngredients: string[]
+): Promise<{ shoppingList?: string[]; error?: string }> {
+  try {
+    const response = await generateShoppingList({
+      availableIngredients,
+      requiredIngredients,
+    });
+    return { shoppingList: response.shoppingList };
+  } catch (e) {
+    console.error(e);
+    return {
+      error:
+        'An error occurred while generating the shopping list. Please try again.',
     };
   }
 }
